@@ -71,6 +71,28 @@ describe('source hygiene', () => {
     }
   });
 
+  it('never lets a countdown overlay outlive its countdown', () => {
+    // Found on the live site: cancel() stops the countdown's timer but cannot
+    // remove its element, and the fade-out removal runs on a separate 320ms
+    // timer — so re-entering runCountdown (next level, host takeover, rematch)
+    // orphaned a full-screen dim + backdrop-filter layer. They are
+    // pointer-events:none so taps still land, but stacked they darken the gauge
+    // until the game looks broken. The sweep must happen BEFORE the new overlay
+    // is appended, or it removes the one it just created.
+    const main = readFileSync('src/main.ts', 'utf8');
+    const sweep = main.indexOf(".querySelectorAll('.countdown')");
+    const append = main.indexOf("overlay.className = 'countdown'");
+    expect(sweep, 'runCountdown must sweep stale .countdown overlays').toBeGreaterThan(-1);
+    expect(sweep).toBeLessThan(append);
+    expect(main.slice(sweep - 200, sweep + 200)).toMatch(/\.remove\(\)/);
+  });
+
+  it('keeps the countdown overlay from ever eating a tap', () => {
+    const css = readFileSync('src/styles/main.css', 'utf8');
+    const block = css.slice(css.indexOf('.countdown {'), css.indexOf('.countdown.go'));
+    expect(block).toMatch(/pointer-events:\s*none/);
+  });
+
   it('keeps the [hidden] guard that stops an invisible overlay eating taps', () => {
     expect(existsSync('src/styles/mobile.css'), 'mobile.css is where the guard lives').toBe(true);
     const css = readFileSync('src/styles/mobile.css', 'utf8');

@@ -530,6 +530,13 @@ function runCountdown(betweenLevels: boolean): void {
   if (!session || !view) return;
   countdown?.cancel();
   const host = view.root;
+  // Sweep up any overlay a previous countdown left behind. cancel() stops the
+  // timer but cannot remove the element, and the fade-out removal is on its own
+  // 320ms timer, so re-entering here (next level, a host takeover, a rematch)
+  // could orphan one. Each is a full-screen dim + backdrop-filter layer; they
+  // are pointer-events:none so they never eat a tap, but stacked they quietly
+  // darken the gauge until the game looks broken.
+  for (const stale of host.querySelectorAll('.countdown')) stale.remove();
   const overlay = document.createElement('div');
   overlay.className = 'countdown';
   host.appendChild(overlay);
