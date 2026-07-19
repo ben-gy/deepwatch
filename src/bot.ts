@@ -15,7 +15,7 @@
  * the only thing that ever makes a crew misplay.
  */
 
-import { makeRng, type Rng } from './engine/rng';
+import { makeRng, type Rng } from '@ben-gy/game-engine/rng';
 import { type DiveState } from './game';
 import {
   JITTER,

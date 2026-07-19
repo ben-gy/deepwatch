@@ -27,8 +27,8 @@
  * ─────────────────────────────────────────────────────────────────────────────
  */
 
-import type { Net, PeerId } from './engine/net';
-import type { RoundPlayer } from './engine/rematch';
+import type { Net, PeerId } from '@ben-gy/game-engine/net';
+import type { RoundPlayer } from '@ben-gy/game-engine/rematch';
 import { createBot, type Bot } from './bot';
 import {
   createDive,

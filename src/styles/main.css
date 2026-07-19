@@ -980,6 +980,22 @@ kbd {
   font-size: 14px;
   text-align: center;
 }
+/*
+ * The "nobody's here yet — host this room" escape hatch (engine v1.1.0). It
+ * reuses .lobby-searching, a centred flex ROW sized for a spinner and six
+ * words. A full sentence plus a button share that row unhappily: on a 390px
+ * phone the button lands at 148px against a wrapped two-line sentence. Stacking
+ * gives the sentence the full width and the button a full-width tap target,
+ * matching every other primary action on this screen.
+ */
+.lobby-searching.lobby-offer {
+  flex-direction: column;
+  gap: 12px;
+}
+.lobby-searching.lobby-offer .lobby-btn {
+  width: 100%;
+}
+
 .lobby-mode {
   margin: 12px 0 0;
   font-size: 14px;

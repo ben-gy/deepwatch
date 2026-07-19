@@ -13,20 +13,21 @@ mountFeedback();
 import './styles/mobile.css';
 import './styles/main.css';
 
-import { createNet, type Net, type PeerId } from './engine/net';
-import { createRounds, type RoundInfo, type RoundPlayer, type Rounds } from './engine/rematch';
+import { createNet, roomAppId, setTurnConfig, type Net, type PeerId } from '@ben-gy/game-engine/net';
+import { getTurnConfig } from '@ben-gy/game-engine/turn';
+import { createRounds, type RoundInfo, type RoundPlayer, type Rounds } from '@ben-gy/game-engine/rematch';
 import {
   clearRoomInUrl,
   createLobby,
   createRoomEntry,
   normalizeRoomCode,
   setRoomInUrl,
-} from './engine/lobby';
-import { hardenViewport } from './engine/mobile';
-import { createStore } from './engine/storage';
-import { resolveName, withName } from './engine/identity';
+} from '@ben-gy/game-engine/lobby';
+import { hardenViewport } from '@ben-gy/game-engine/mobile';
+import { createStore } from '@ben-gy/game-engine/storage';
+import { resolveName, withName } from '@ben-gy/game-engine/identity';
 import { makeDraggable } from './engine/drag';
-import { newSeed } from './engine/rng';
+import { newSeed } from '@ben-gy/game-engine/rng';
 import { startCountdown, type Countdown } from './countdown';
 import { createSfx } from './sound';
 import { DiveView, escapeHtml } from './render';
@@ -41,6 +42,20 @@ const APP_ID = 'deepwatch';
 const MAX_DIVERS = 4;
 
 hardenViewport();
+
+/**
+ * Fetch the TURN credentials and hand them to net.ts BEFORE any mesh exists.
+ *
+ * Trystero builds ONE global RTCPeerConnection pool from the config of the very
+ * first joinRoom on the page, so a setTurnConfig() that lands after that join is
+ * silently ignored and the initiating half of every pair stays STUN-only —
+ * which is exactly nothing on a carrier CGNAT, and was why peers never appeared
+ * in each other's rooms. Kicking it off at boot rather than inside enterRoom()
+ * means it is almost always resolved by the time a player types a code, and
+ * getTurnConfig() is session-cached and fails open to [] so it can never block
+ * or break a join if the credential endpoint is down.
+ */
+const turnReady = getTurnConfig().then((servers) => setTurnConfig(servers));
 
 const store = createStore(APP_ID);
 const sfx = createSfx(store.get('muted', false));
@@ -96,6 +111,14 @@ const footer = `
   </footer>`;
 
 function screen(inner: string, cls = ''): void {
+  // Painting a new screen destroys the lobby's container, so the lobby itself
+  // must go with it — it owns a repeating timer and (under ?netdebug=1) an
+  // element parked on document.body that innerHTML here would never reach.
+  // Doing it in one place is what lets showLobby() keep a LIVE lobby mounted
+  // across repaints instead of rebuilding it, which is what the host-offer
+  // timer needs to survive.
+  lobbyView?.destroy();
+  lobbyView = null;
   app.innerHTML = `<div class="main-content ${cls}">${inner}</div>${footer}`;
 }
 
@@ -288,7 +311,7 @@ function startSolo(): void {
     { id: 'you', name: playerName },
     ...Array.from({ length: soloCrew - 1 }, (_, i) => ({ id: `ai${i}`, name: botName(i) })),
   ];
-  lastRound = { round: 1, seed: newSeed(), players, isHost: true, opts: { mode } };
+  lastRound = { round: 1, seed: newSeed(), players, isHost: true, seated: true, opts: { mode } };
   beginDive(players, 0, true, undefined, lastRound.seed, mode);
 }
 
@@ -301,26 +324,32 @@ function showRoomEntry(): void {
   if (deepLink) {
     const code = deepLink;
     deepLink = null;
-    return enterRoom(code, false);
+    void enterRoom(code, false);
+    return;
   }
   screen('<div class="sheet"><div class="entry-host"></div></div>');
   entryView = createRoomEntry({
     container: app.querySelector<HTMLElement>('.entry-host')!,
-    onSubmit: (code, created) => enterRoom(code, created),
+    onSubmit: (code, created) => void enterRoom(code, created),
     onCancel: () => showMenu(),
   });
 }
 
-function enterRoom(code: string, created: boolean): void {
+async function enterRoom(code: string, created: boolean): Promise<void> {
   entryView?.destroy();
   entryView = null;
   roomCode = normalizeRoomCode(code);
   setRoomInUrl(roomCode);
 
+  // The TURN fetch started at boot; this is the last moment it can still matter,
+  // because createNet() below is this page's first joinRoom and Trystero freezes
+  // its ICE config there. turnReady never rejects.
+  await turnReady;
+
   // ONE join for the whole session. Rounds are versioned inside it by
   // rematch.ts; nothing here ever calls leave() to "reset".
   net = createNet(
-    { appId: APP_ID, roomId: roomCode, claimHost: created },
+    { appId: roomAppId(APP_ID), roomId: roomCode, claimHost: created },
     {
       onHostChange: (_id, isSelfHost) => {
         if (isSelfHost) session?.takeOver();
@@ -349,22 +378,53 @@ function enterRoom(code: string, created: boolean): void {
   showLobby();
 }
 
+/**
+ * The mode strip under the lobby — the only part of this screen the GAME owns.
+ *
+ * It is repainted on its own, without touching the lobby beneath it, because
+ * createLobby() is stateful now: it times how long this peer has sat alone and
+ * unsettled, and after 15s offers "Nobody's here yet — host this room", which is
+ * the only escape from an invite-link room whose mesh never formed. Rebuilding
+ * the lobby on every roster tick restarts that clock, so the offer never
+ * arrives and the player waits on a spinner forever. (It also leaked a 600ms
+ * interval and a debug overlay per rebuild — this screen had accumulated 34 of
+ * each within twenty seconds.)
+ */
+function paintLobbyModes(): void {
+  const host = app.querySelector<HTMLElement>('.lobby-modes');
+  if (!host || !net || !rounds) return;
+  const hostMode = modeOf((rounds.state().hostOpts as { mode?: string } | null)?.mode);
+  host.innerHTML = `
+    <p class="lobby-mode">Diving <b>${hostMode.name}</b> — ${escapeHtml(hostMode.blurb)}
+      <em>${net.isHost() ? 'your choice, as host' : "the host's choice"}</em></p>
+    ${net.isHost() ? `<div class="picker small" role="radiogroup" aria-label="Dive">${MODE_IDS.map(
+      (id) => `<button class="mode${id === mode ? ' on' : ''}" type="button" role="radio"
+         aria-checked="${id === mode}" data-mode="${id}"><b>${MODES[id].name}</b></button>`,
+    ).join('')}</div>` : ''}`;
+
+  for (const el of host.querySelectorAll<HTMLElement>('.picker.small .mode')) {
+    el.addEventListener('click', () => {
+      mode = modeOf(el.dataset.mode).id;
+      store.set('mode', mode);
+      sfx.play('select');
+      paintLobbyModes();
+    });
+  }
+}
+
 function showLobby(): void {
   screenState = 'lobby';
   setPlaying(false);
   teardownDive();
   if (!net || !rounds) return showMenu();
 
-  const hostMode = modeOf((rounds.state().hostOpts as { mode?: string } | null)?.mode);
+  // Already mounted: repaint only our own chrome and leave the lobby alone.
+  if (lobbyView) return paintLobbyModes();
+
   screen(
     `<div class="sheet">
        <div class="lobby-host"></div>
-       <p class="lobby-mode">Diving <b>${hostMode.name}</b> — ${escapeHtml(hostMode.blurb)}
-         <em>${net.isHost() ? 'your choice, as host' : "the host's choice"}</em></p>
-       ${net.isHost() ? `<div class="picker small" role="radiogroup" aria-label="Dive">${MODE_IDS.map(
-         (id) => `<button class="mode${id === mode ? ' on' : ''}" type="button" role="radio"
-            aria-checked="${id === mode}" data-mode="${id}"><b>${MODES[id].name}</b></button>`,
-       ).join('')}</div>` : ''}
+       <div class="lobby-modes"></div>
      </div>`,
   );
 
@@ -378,14 +438,7 @@ function showLobby(): void {
     onCancel: () => void leaveRoom(),
   });
 
-  for (const el of app.querySelectorAll<HTMLElement>('.picker.small .mode')) {
-    el.addEventListener('click', () => {
-      mode = modeOf(el.dataset.mode).id;
-      store.set('mode', mode);
-      sfx.play('select');
-      showLobby();
-    });
-  }
+  paintLobbyModes();
 }
 
 async function leaveRoom(): Promise<void> {
@@ -411,6 +464,17 @@ async function leaveRoom(): Promise<void> {
 
 function onRoundStart(info: RoundInfo): void {
   lastRound = info;
+
+  // The round started without us: we joined mid-dive, or our vote never reached
+  // the host before it froze the roster. Leaving the lobby mounted is the whole
+  // fix — it renders its spectating view with the ready toggle still live, so we
+  // are queued for the next round. Diving anyway would seat us at index -1,
+  // which is what "I got ejected" looked like from the player's seat.
+  if (!info.seated) {
+    if (screenState !== 'lobby') showLobby();
+    return;
+  }
+
   lobbyView?.destroy();
   lobbyView = null;
   const roundMode = modeOf((info.opts as { mode?: string } | undefined)?.mode).id;
