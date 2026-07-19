@@ -5,6 +5,11 @@
  * single rule of it, and hardenViewport() runs before the first screen paints.
  */
 
+// feedback:begin (managed by hub/scripts/feedback/backfill.mjs)
+import { mountFeedback } from './feedback';
+mountFeedback();
+// feedback:end
+
 import './styles/mobile.css';
 import './styles/main.css';
 
