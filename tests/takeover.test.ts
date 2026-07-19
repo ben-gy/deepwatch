@@ -15,8 +15,8 @@
  */
 
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import type { Net, PeerId } from '../src/engine/net';
-import type { RoundPlayer } from '../src/engine/rematch';
+import type { Net, PeerId } from '@ben-gy/game-engine/net';
+import type { RoundPlayer } from '@ben-gy/game-engine/rematch';
 import { Session, rebuildHands } from '../src/net-game';
 import { dealLevel } from '../src/game';
 import { MODES, deckFor, levelsFor } from '../src/modes';

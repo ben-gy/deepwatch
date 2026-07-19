@@ -15,7 +15,7 @@
  */
 
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import type { Net } from '../src/engine/net';
+import type { Net } from '@ben-gy/game-engine/net';
 
 interface Wire {
   peers: Map<string, Room>;
@@ -91,7 +91,7 @@ async function peer(id: string, opts: { claimHost?: boolean } = {}): Promise<Net
       return room;
     },
   }));
-  const mod = await import('../src/engine/net');
+  const mod = await import('@ben-gy/game-engine/net');
   return mod.createNet({ appId: 'deepwatch', roomId: 'R', claimHost: opts.claimHost });
 }
 
@@ -152,7 +152,11 @@ describe('host election — nobody hosts a mesh that has not formed', () => {
     const a = await peer('a');
     const b = await peer('b');
     connect('a', 'b');
-    vi.advanceTimersByTime(2600);
+    // The settle window went 2.5s -> 6s in engine v1.1.0. The old window was
+    // short enough that a joiner could finish waiting before a live incumbent's
+    // announcement reached it, self-elect, and steal the room out from under
+    // the peers already playing in it.
+    vi.advanceTimersByTime(6100);
     expect(a.isHost()).toBe(true);
     expect(b.isHost()).toBe(false);
     expect(b.host()).toBe('a');

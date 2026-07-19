@@ -55,7 +55,7 @@ vi.mock('trystero', () => ({
   },
 }));
 
-const { createNet, netStats, resetNetStats } = await import('../src/engine/net');
+const { createNet, netStats, resetNetStats } = await import('@ben-gy/game-engine/net');
 
 const APP = 'deepwatch-lifecycle';
 
@@ -152,13 +152,17 @@ describe('createNet — channel fan-out', () => {
     await net.leave();
   });
 
-  it('keeps the rematch protocol on exactly three reserved names', () => {
-    // net.channel() fans out, so a game channel colliding with 'rv'/'rs'/'rq'
-    // would feed every message to both subsystems. Deepwatch's own channels are
-    // 'snap' and 'act'; assert the engine still reserves exactly its three.
-    const src = readFileSync('src/engine/rematch.ts', 'utf8');
+  it('keeps the rematch protocol on exactly four reserved names', () => {
+    // net.channel() fans out, so a game channel colliding with a reserved name
+    // would feed every message to both subsystems. Engine v1.1.0 added a fourth,
+    // 'rk' — the start acknowledgement that stops a peer being ejected when the
+    // host froze the roster from a half-formed mesh. Deepwatch's own channels
+    // are 'snap' and 'act'; assert both that the reserved set is what we think
+    // it is and that ours stay clear of it.
+    const src = readFileSync('node_modules/@ben-gy/game-engine/src/rematch.ts', 'utf8');
     const reserved = [...src.matchAll(/net\.channel<[^>]*>\(\s*'([^']+)'/g)].map((m) => m[1]);
-    expect(reserved.sort()).toEqual(['rq', 'rs', 'rv']);
+    expect(reserved.sort()).toEqual(['rk', 'rq', 'rs', 'rv']);
     for (const c of reserved) expect(c.length).toBeLessThanOrEqual(12);
+    for (const own of ['snap', 'act']) expect(reserved).not.toContain(own);
   });
 });

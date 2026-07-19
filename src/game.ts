@@ -24,7 +24,7 @@
  * asserted directly in tests/game.test.ts rather than left as an argument.
  */
 
-import { makeRng, shuffle } from './engine/rng';
+import { makeRng, shuffle } from '@ben-gy/game-engine/rng';
 import { deckFor, levelsFor, modeOf, tideForLevel, type Mode, type ModeId } from './modes';
 import { SONAR_HOLD_MS, TIDE_REFUND } from './tuning';
 
