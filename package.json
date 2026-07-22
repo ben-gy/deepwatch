@@ -4,6 +4,7 @@
   "version": "1.0.0",
   "type": "module",
   "description": "A silent co-op dive — surface the deep in order, without saying a word.",
+  "license": "AGPL-3.0-or-later",
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",

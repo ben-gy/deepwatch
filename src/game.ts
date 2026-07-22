@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Copyright (C) 2026 Ben Richardson — https://benrichardson.dev
+// Additional terms under AGPL-3.0 section 7(b) apply; see ADDITIONAL-TERMS.md.
 /**
  * game.ts — the dive itself. Pure, tick-driven, and free of the DOM, the clock
  * and the network, so the identical code runs the real game at 60fps and a few
