@@ -29,7 +29,7 @@ import { resolveName, withName } from '@ben-gy/game-engine/identity';
 import { makeDraggable } from './engine/drag';
 import { newSeed } from '@ben-gy/game-engine/rng';
 import { startCountdown, type Countdown } from './countdown';
-import { createSfx } from './sound';
+import { createGameSfx, depthPitch } from './cues';
 import { DiveView, escapeHtml } from './render';
 import { renderResults } from './results';
 import { bubbles, shake, silt, sonarSweep } from './fx';
@@ -58,7 +58,7 @@ hardenViewport();
 const turnReady = getTurnConfig().then((servers) => setTurnConfig(servers));
 
 const store = createStore(APP_ID);
-const sfx = createSfx(store.get('muted', false));
+const sfx = createGameSfx(store.get('muted', false));
 const app = document.querySelector<HTMLDivElement>('#app')!;
 
 /**
@@ -634,7 +634,7 @@ function onDiveEvents(events: DiveEvent[]): void {
 
   for (const e of events) {
     if (e.t === 'surface') {
-      sfx.play('surface', { depth: e.depth / Math.max(1, e.deckMax) });
+      sfx.play('surface', { pitch: depthPitch(e.depth, e.deckMax) });
       if (gauge) bubbles(gauge, (e.depth / Math.max(1, s.deckMax)) * 100);
     } else if (e.t === 'misplay') {
       sfx.play('misplay');
