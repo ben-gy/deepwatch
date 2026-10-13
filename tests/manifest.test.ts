@@ -7,7 +7,7 @@
  */
 
 import { describe, expect, it } from 'vitest';
-import { readFileSync } from 'node:fs';
+import { readdirSync, readFileSync } from 'node:fs';
 import { inflateSync } from 'node:zlib';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -168,11 +168,15 @@ describe('the anti-zoom contract', () => {
 
 describe('no debug noise ships', () => {
   it('src has no console.log / console.error', () => {
-    const files = [
-      'src/main.ts', 'src/game.ts', 'src/net-game.ts', 'src/render.ts', 'src/bot.ts',
-      'src/fx.ts', 'src/sound.ts', 'src/results.ts', 'src/modes.ts', 'src/tuning.ts',
-      'src/countdown.ts', 'src/sim.ts',
-    ];
+    // Enumerated, not hand-listed: this was a fixed array naming twelve files,
+    // which meant deleting one (src/sound.ts, when it stopped being a fork of the
+    // engine synth) turned the check red for the wrong reason, and adding one
+    // silently left it unchecked. readdirSync keeps the guarantee honest as the
+    // directory moves.
+    const files = readdirSync(join(ROOT, 'src'), { recursive: true, encoding: 'utf8' })
+      .filter((f) => f.endsWith('.ts'))
+      .map((f) => join('src', f));
+    expect(files.length).toBeGreaterThan(8);
     for (const f of files) {
       expect(read(f), `${f} has a console call`).not.toMatch(/console\.(log|error|warn|debug)\s*\(/);
     }
