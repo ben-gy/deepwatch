@@ -1,14 +1,12 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Copyright (C) 2026 Ben Richardson — https://benrichardson.dev
+// Additional terms under AGPL-3.0 section 7(b) apply; see ADDITIONAL-TERMS.md.
 /**
  * main.ts — bootstrap and screen flow.
  *
  * mobile.css is imported FIRST so the game's own stylesheet can override any
  * single rule of it, and hardenViewport() runs before the first screen paints.
  */
-
-// feedback:begin (managed by hub/scripts/feedback/backfill.mjs)
-import { mountFeedback } from './feedback';
-mountFeedback();
-// feedback:end
 
 import './styles/mobile.css';
 import './styles/main.css';
